@@ -15,7 +15,6 @@ It is going to be consisted of:
 			* Implicit Collection for Org1
 			* Implicit Collection for Org2
 			* Implicit Collection for Org3
-			* Private Collection for all of them together (Org1, Org2,Org3)
 			* Shared Collections between them were added works fine
 
 
