@@ -1,0 +1,2 @@
+In this scenario the Orgs will have initially a shared collection between them, to replace world state and 
+once that works we will replace it with shared collections between them
