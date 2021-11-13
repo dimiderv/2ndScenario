@@ -48,6 +48,7 @@ func (s *SmartContract) GetAssetHistory(ctx contractapi.TransactionContextInterf
 				ID: assetID,
 			}
 		}
+		//this can be solved from front end
 		if prevOwner== (&asset).Owner{
 			continue 
 		}
