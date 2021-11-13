@@ -4,3 +4,6 @@
 for 3 orgs
 
 ./network.sh deployCC -ccn try -ccp ../2ndScenario/ -ccl go -ccep "OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer')" -cccg ../asset-transfer-private-data/chaincode-go/collections_config.json
+
+
+./network.sh deployCC -ccn try -ccp ../2ndScenario/ -ccl go -ccep "OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer')" -cccg ../2ndScenario/collections_config.json
