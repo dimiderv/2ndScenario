@@ -1,4 +1,4 @@
-This is the second scenario where 3 orgs share a private collection between them 
+#This is the second scenario where 3 orgs share a private collection between them , now it has only shared collection betwenn org1- and org23
 
 
 I used attribute based access control for creation of product and create a simple example of using that.
@@ -15,7 +15,8 @@ It is going to be consisted of:
 			* Implicit Collection for Org1
 			* Implicit Collection for Org2
 			* Implicit Collection for Org3
-			* Shared Collections between them were added works fine
+			* Shared Collections between them were added works fine\
+			* Priv collection between orgs 12 and 23
 
 
 
