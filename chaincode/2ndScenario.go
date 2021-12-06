@@ -23,15 +23,16 @@ type SmartContract struct {
 
 // Asset describes basic details of what makes up a simple asset
 type Asset struct {
-//   ObjectType 	 string      `json:"objectType"`
-  ID             string  	 `json:"ID"`
-  Color          string 	 `json:"color"`
-  Weight         int         `json:"weight"`
-  Owner          string      `json:"owner"`
-  Timestamp      time.Time 	 `json:"timestamp"`
-  Creator        string 	 `json:"creator"`
-  ExpirationDate time.Time   `json:"expirationDate"`
-  SensorData 	 string		 `json:"sensorData"`	
+	AssetType 	 string      	`json:"assetType"`
+	ID             string  	 	`json:"ID"`
+	Color          string 	 	`json:"color"`
+	Weight         int       	`json:"weight"`
+	Owner          string    	`json:"owner"`
+	OwnerOrg       string    	`json:ownerOrg`
+	Timestamp      time.Time 	`json:"timestamp"`
+	Creator        string 	 	`json:"creator"`
+	ExpirationDate time.Time 	`json:"expirationDate"`
+	SensorData 	 string		 	`json:"sensorData"`
   
 }
 
@@ -70,13 +71,20 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 	}
 	expirationDate := timestamp.AddDate(0,0,7)
 
+	//in case a user from other org has the same name , cause they have different CAs that might happen
+	clientOrgID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return  fmt.Errorf("failed getting client's orgID: %v", err)
+	}
+
+
 	assets := []Asset{
-		{ID: "asset1", Color: "blue", 	Weight: 5,  Owner: clientID,Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
-		{ID: "asset2", Color: "orange", 	Weight: 5,  Owner: clientID, Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
-		{ID: "asset3", Color: "green", 	Weight: 10, Owner: clientID, Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
-		{ID: "asset4", Color: "yellow", Weight: 10, Owner: clientID, Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
-		{ID: "asset5", Color: "black", 	Weight: 15, Owner: clientID, Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
-		{ID: "asset6", Color: "pink", 	Weight: 15, Owner: clientID,Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
+		{ID: "asset1", Color: "blue",   AssetType:"berries", Weight: 5,  Owner: clientID, OwnerOrg:clientOrgID,Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
+		{ID: "asset2", Color: "black",  AssetType:"berries", Weight: 5,  Owner: clientID, OwnerOrg:clientOrgID,Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
+		{ID: "asset3", Color: "green",  AssetType:"apples",  Weight: 10, Owner: clientID, OwnerOrg:clientOrgID,Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
+		{ID: "asset4", Color: "yellow", AssetType:"apples",  Weight: 10, Owner: clientID, OwnerOrg:clientOrgID,Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
+		{ID: "asset5", Color: "red",    AssetType:"apples",  Weight: 15, Owner: clientID, OwnerOrg:clientOrgID,Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
+		{ID: "asset6", Color: "white",  AssetType:"grapes",  Weight: 15, Owner: clientID, OwnerOrg:clientOrgID,Timestamp: timestamp,Creator: creatorDN,SensorData:"",ExpirationDate:expirationDate},
 	  }
   for _, asset := range assets {
     assetJSON, err := json.Marshal(asset)
@@ -94,7 +102,7 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 }
 
 // CreateAsset issues a new asset to the world state with given details and adds price to shared collection.
-func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, id string, color string, weight int) error {
+func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, id string, color string, weight int,assetType string) error {
 //objectType strings,
 
 	//check if asset already exists
@@ -113,7 +121,7 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 	if clientOrgID != "Org1MSP"{
 		return fmt.Errorf("submitting client not authorized to create asset, not a member of Org1")
 	}
-	
+
 	//Access Control only farmers can createAssets
 	temp := ctx.GetClientIdentity().AssertAttributeValue("retailer", "true")
 	if temp==nil {
@@ -124,7 +132,7 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 	if farmer != nil {
 		return fmt.Errorf("submitting client not authorized to create asset, he is not a Farmer")
 	}
-	
+
 		
 
 	// Get ID of submitting client identity
@@ -151,11 +159,6 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 	expirationDate := timestamp.AddDate(0,0,7)
 
 
-		// Set the endorsement policy such that an owner org peer is required to endorse future updates
-	// err = setAssetStateBasedEndorsement(ctx, id, clientOrgID)
-	// if err != nil {
-	// 	return fmt.Errorf("failed setting state based endorsement for owner: %v", err)
-	// }
 	// Verify that the client is submitting request to peer in their organization
 	// This is to ensure that a client from another org doesn't attempt to read or
 	// write private data from this peer.
@@ -166,11 +169,12 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 
 	// Make submitting client the owner
 	asset := Asset{
-		// ObjectType:		objectType,
+		AssetType:		assetType,
 		ID:    			id,
 		Color: 			color,
 		Weight:  		weight,
 		Owner: 			clientID,
+		OwnerOrg:		clientOrgID,
 		Timestamp:  	timestamp,
 		Creator: 		creatorDN,
 		ExpirationDate:	expirationDate,
@@ -181,13 +185,13 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 		return fmt.Errorf("failed to marshal asset into JSON: %v", err)
 	}
 
-	
+
 
 	err = ctx.GetStub().PutState(id, assetJSONasBytes)//puts data in public
 	if err != nil {
 		return fmt.Errorf("failed to put asset into private data collecton: %v", err)
 	}
-	
+
 	return nil
 
 }
@@ -200,6 +204,11 @@ func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface,
 		return err
 	}
 
+	clientOrgID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return  fmt.Errorf("failed getting client's orgID: %v", err)
+	}
+	
 	clientID, err := s.GetSubmittingClientIdentity(ctx)
 	if err != nil {
 		return err
@@ -209,6 +218,9 @@ func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface,
 		return fmt.Errorf("submitting client not authorized to update asset, does not own asset")
 	}
 
+	if clientOrgID != asset.OwnerOrg {
+		return fmt.Errorf("submitting client not authorized to update asset, not from the same Org")
+	}
 	asset.Color = newColor
 	asset.Weight = newWeight
 
@@ -236,6 +248,15 @@ func (s *SmartContract) DeleteAsset(ctx contractapi.TransactionContextInterface,
 
 	if clientID != asset.Owner {
 		return fmt.Errorf("submitting client not authorized to update asset, does not own asset")
+	}
+
+	clientOrgID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return  fmt.Errorf("failed getting client's orgID: %v", err)
+	}
+
+	if clientOrgID != asset.OwnerOrg {
+		return fmt.Errorf("submitting client not authorized to update asset, not from the same Org")
 	}
 
 	return ctx.GetStub().DelState(id)

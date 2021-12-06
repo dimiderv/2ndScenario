@@ -7,6 +7,22 @@ import (
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
+
+// RequestToBuyExists returns true when asset Price exists on shared collection so we dont redefine it
+func (s *SmartContract) RequestToBuyExists(ctx contractapi.TransactionContextInterface, assetID string,sharedCollection string) (bool, error) {
+
+	requestToBuyKey, err := ctx.GetStub().CreateCompositeKey(requestToBuyObjectType, []string{assetID})
+	if err != nil {
+		return false, fmt.Errorf("failed to create composite key: %v", err)
+	}
+	requestJSON, err := ctx.GetStub().GetPrivateData(sharedCollection, requestToBuyKey) // Get price from shared collection
+	if err != nil {
+		return false, fmt.Errorf("failed to read RequestToBuyObject: %v", err)
+	}
+
+	return requestJSON != nil, nil
+}
+
 // ReadRequestToBuy gets the buyer's identity from the transfer request from collection
 func (s *SmartContract) ReadRequestToBuy(ctx contractapi.TransactionContextInterface, assetID string, sharedCollection string) (*RequestToBuyObject, error) {
 	//log.Printf("ReadRequestToBuy: collection %v, ID %v", assetCollection, assetID)

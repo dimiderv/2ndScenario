@@ -5,9 +5,9 @@ import (
   "fmt"
   "log"
   "bytes"
-  "github.com/hyperledger/fabric-chaincode-go/pkg/statebased"
+  //"github.com/hyperledger/fabric-chaincode-go/pkg/statebased"
   "github.com/hyperledger/fabric-contract-api-go/contractapi"
-  "time"
+  //"time"
   
   //"github.com/golang/protobuf/ptypes"
 
@@ -19,8 +19,6 @@ import (
 const (
 	typeAssetForSale     = "S"
 	typeAssetBid         = "B"
-	typeAssetSaleReceipt = "SR"
-	typeAssetBuyReceipt  = "BR"
 )
 const assetCollection = "assetCollection"
 const assetCollection23 = "assetCollection23"
@@ -32,10 +30,6 @@ type AssetPrivateDetails struct {
 	Price 		   int    `json:"price"`
 }
 
-type receipt struct {
-	price     int
-	timestamp time.Time
-}
 
 type RequestToBuyObject struct {
 	ID      string `json:"assetID"`
@@ -59,6 +53,15 @@ func (s *SmartContract) SetPrice(ctx contractapi.TransactionContextInterface, as
 	// Verify that this client  actually owns the asset.
 	if clientID != asset.Owner {
 		return fmt.Errorf("a client from %s cannot sell an asset owned by %s", clientID, asset.Owner)
+	}
+
+	clientOrgID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return  fmt.Errorf("failed getting client's orgID: %v", err)
+	}
+
+	if clientOrgID != asset.OwnerOrg {
+		return fmt.Errorf("submitting client not from the same Org.Clients org is %s and buyers is %s", clientOrgID, asset.OwnerOrg)
 	}
 
 	return SaveToCollection(ctx, assetID, typeAssetForSale)
@@ -120,12 +123,6 @@ func (s *SmartContract) RequestToBuy(ctx contractapi.TransactionContextInterface
 		return err
 	}
 
-	
-	// Verify that the client is submitting request to peer in their organization
-	// err = verifyClientOrgMatchesPeerOrg(ctx)
-	// if err != nil {
-	// 	return fmt.Errorf("RequestToBuy cannot be performed: Error %v", err)
-	// }
 	clientMSPID,err:=ctx.GetClientIdentity().GetMSPID()
 	if err != nil {
 		return fmt.Errorf("failed getting the client's MSPID: %v", err)
@@ -141,6 +138,15 @@ func (s *SmartContract) RequestToBuy(ctx contractapi.TransactionContextInterface
 	temp:=assetCollection
 	if clientMSPID =="Org3MSP"{
 		temp=assetCollection23
+	}
+
+	//check if a request already exists,so users cant override requests
+	exists, err := s.RequestToBuyExists(ctx, assetID,temp)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("A request for the asset %s already exists", assetID)
 	}
 	//I could change it to make it as function input
 	err = ctx.GetStub().PutPrivateData(temp,buyRequestKey, []byte(buyerID))
@@ -200,7 +206,7 @@ func (s *SmartContract) TransferRequestedAsset(ctx contractapi.TransactionContex
 	}
 
 	// Verify transfer details and transfer owner
-	err = s.verifyAgreement(ctx, asset.ID, asset.Owner, assetTransferInput.BuyerMSP)
+	err = s.verifyAgreement(ctx, asset.ID, asset.Owner,asset.OwnerOrg, assetTransferInput.BuyerMSP)
 	if err != nil {
 		return fmt.Errorf("failed transfer verification: %v", err)
 	}
@@ -224,7 +230,7 @@ func (s *SmartContract) TransferRequestedAsset(ctx contractapi.TransactionContex
 
 	//change ownership
 	asset.Owner = buyRequest.BuyerID
-
+	asset.OwnerOrg = assetTransferInput.BuyerMSP
 	assetJSONasBytes, err := json.Marshal(asset)
 	if err != nil {
 		return fmt.Errorf("failed marshalling asset %v: %v", asset.ID, err)
@@ -257,44 +263,6 @@ func (s *SmartContract) TransferRequestedAsset(ctx contractapi.TransactionContex
 	}
 
 
-	// Set the endorsement policy such that an owner org peer is required to endorse future updates
-	// err = setAssetStateBasedEndorsement(ctx, asset.ID, assetTransferInput.BuyerMSP)
-	// if err != nil {
-	// 	return fmt.Errorf("failed setting state based endorsement for owner: %v", err)
-	// }
-
-	//collectionBuyer :="_implicit_org_"+assetTransferInput.BuyerMSP  // get buyers collection
-
-	// Delete the price records for buyer,cause a new set is going to be created to sell to Org3 with a different price
-	// assetPriceKey, err = ctx.GetStub().CreateCompositeKey(typeAssetBid, []string{asset.ID})
-	// if err != nil {
-	// 	return fmt.Errorf("failed to create composite key for buyer: %v", err)
-	// }
-
-	// err = ctx.GetStub().DelPrivateData(collectionBuyer, assetPriceKey)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to delete asset price from implicit private data collection for buyer: %v", err)
-	// }
-
-
-	// // Delete the buy request from the shared asset collection
-	// buyRequestKey, err := ctx.GetStub().CreateCompositeKey(requestToBuyObjectType, []string{asset.ID})
-	// if err != nil {
-	// 	return fmt.Errorf("failed to create composite key: %v", err)
-	// }
-
-	// err = ctx.GetStub().DelPrivateData(assetCollection,buyRequestKey)
-	// if err != nil {
-	// 	return err
-	// }
-
-
-	//this part a receipt is going to be added to both orgs implicit collection
-	// Keep record for a 'receipt' in both buyers and sellers private data collection to record the sale price and date.
-
-
-
-	
 
 	return nil
 
@@ -303,31 +271,12 @@ func (s *SmartContract) TransferRequestedAsset(ctx contractapi.TransactionContex
 
 
 /*============================HELPER FUNCTIONS=============================================*/
-func setAssetStateBasedEndorsement(ctx contractapi.TransactionContextInterface, assetID string, orgToEndorse string) error {
-	endorsementPolicy, err := statebased.NewStateEP(nil)
-	if err != nil {
-		return err
-	}
-	err = endorsementPolicy.AddOrgs(statebased.RoleTypePeer, orgToEndorse)
-	if err != nil {
-		return fmt.Errorf("failed to add org to endorsement policy: %v", err)
-	}
-	policy, err := endorsementPolicy.Policy()
-	if err != nil {
-		return fmt.Errorf("failed to create endorsement policy bytes from org: %v", err)
-	}
-	err = ctx.GetStub().SetStateValidationParameter(assetID, policy)
-	if err != nil {
-		return fmt.Errorf("failed to set validation parameter on asset: %v", err)
-	}
 
-	return nil
-}
 
 // verifyAgreement is an internal helper function used by TransferAsset to verify
 // that the transfer is being initiated by the owner and that the buyer has agreed
 // to the same appraisal value as the owner
-func (s *SmartContract) verifyAgreement(ctx contractapi.TransactionContextInterface, assetID string, owner string, buyerMSP string) error {
+func (s *SmartContract) verifyAgreement(ctx contractapi.TransactionContextInterface, assetID string, owner string,ownerOrg string, buyerMSP string) error {
 
 	// Check 1: verify that the transfer is being initiatied by the owner
 
@@ -340,6 +289,18 @@ func (s *SmartContract) verifyAgreement(ctx contractapi.TransactionContextInterf
 	if clientID != owner {
 		return fmt.Errorf("error: submitting client identity does not own asset")
 	}
+
+	//added this to avoid same name but different orgs
+	clientOrgID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return  fmt.Errorf("failed getting client's orgID: %v", err)
+	}
+
+	if clientOrgID != ownerOrg {
+		return fmt.Errorf("submitting client not from the same Org.Clients org is %s and buyers is %s",clientOrgID,ownerOrg)
+	}
+
+
 
 	// Check 2: verify that the buyer has agreed to the appraised value
 
@@ -389,21 +350,6 @@ func (s *SmartContract) verifyAgreement(ctx contractapi.TransactionContextInterf
 
 
 
-
-// getCollectionName is an internal helper function to get collection of submitting client identity.
-func getCollectionName(ctx contractapi.TransactionContextInterface) (string, error) {
-
-	// Get the MSP ID of submitting client identity
-	clientMSPID, err := ctx.GetClientIdentity().GetMSPID()
-	if err != nil {
-		return "", fmt.Errorf("failed to get verified MSPID: %v", err)
-	}
-
-	// Create the collection name
-	orgCollection := clientMSPID + "PrivateCollection"
-
-	return orgCollection, nil
-}
 
 // verifyClientOrgMatchesPeerOrg is an internal function used verify client org id and matches peer org id.
 func verifyClientOrgMatchesPeerOrg(ctx contractapi.TransactionContextInterface) error {
