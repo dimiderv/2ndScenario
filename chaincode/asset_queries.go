@@ -29,7 +29,7 @@ func (s *SmartContract) GetAssetHistory(ctx contractapi.TransactionContextInterf
 		return nil, err
 	}
 	defer resultsIterator.Close()
-	var prevOwner string = ""
+	//var prevOwner string = ""
 	var records []HistoryQueryResult
 	for resultsIterator.HasNext() {
 		response, err := resultsIterator.Next()
@@ -49,10 +49,10 @@ func (s *SmartContract) GetAssetHistory(ctx contractapi.TransactionContextInterf
 			}
 		}
 		//this can be solved from front end
-		if prevOwner== (&asset).Owner{
-			continue 
-		}
-		prevOwner=(&asset).Owner
+		// if prevOwner== (&asset).Owner{
+		// 	continue 
+		// }
+		// prevOwner=(&asset).Owner
 
 		timestamp, err := ptypes.Timestamp(response.Timestamp)
 		if err != nil {
